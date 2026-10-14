@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Supervisor - Returned Items</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-role="supervisor">
+  <div class="wrap">
+
+    <div id="login">
+      <h1>Supervisor login</h1>
+      <p class="sub">Enter the supervisor password to see returned item reports.</p>
+      <form id="login-form" class="card">
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <button class="full" type="submit">Log in</button>
+        <div id="login-error" class="message error" style="display:block;background:none;padding:8px 0 0"></div>
+      </form>
+    </div>
+
+    <div id="main" hidden>
+      <div class="nav">
+        <h1>Supervisor</h1>
+        <a href="#" id="logout">Log out</a>
+      </div>
+      <p class="sub"><span id="waiting-count">0</span> report(s) waiting for your signature.</p>
+
+      <div class="tabs">
+        <button data-filter="waiting">Waiting</button>
+        <button data-filter="done">Signed</button>
+        <button data-filter="all">All</button>
+      </div>
+
+      <div id="list"></div>
+    </div>
+
+  </div>
+  <script src="/staff.js"></script>
+</body>
+</html>

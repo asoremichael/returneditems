@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Report a Returned Item</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>Report a Returned Item</h1>
+    <p class="sub">Fill in the details of the spoilt item you brought back to the office.</p>
+
+    <form id="form" class="card">
+      <label for="engineer_name">Your name</label>
+      <input id="engineer_name" maxlength="100" autocomplete="name" />
+
+      <label for="item">Item <span class="req">*</span></label>
+      <input id="item" maxlength="200" required />
+
+      <div class="row">
+        <div>
+          <label for="quantity">Quantity <span class="req">*</span></label>
+          <input id="quantity" type="number" min="1" value="1" inputmode="numeric" required />
+        </div>
+        <div>
+          <label for="return_date">Date <span class="req">*</span></label>
+          <input id="return_date" type="date" required />
+        </div>
+      </div>
+
+      <label for="site">Location (site) <span class="req">*</span></label>
+      <input id="site" maxlength="200" required />
+
+      <label for="serial_number">Serial number</label>
+      <input id="serial_number" maxlength="100" />
+
+      <label for="reason">Reason for return <span class="req">*</span></label>
+      <textarea id="reason" maxlength="2000" required></textarea>
+
+      <label>Photos (up to 3)</label>
+      <input id="photo_input" type="file" accept="image/*" multiple />
+      <div id="previews" class="previews"></div>
+
+      <button id="submit" class="full" type="submit">Submit report</button>
+      <div id="message" class="message"></div>
+    </form>
+  </div>
+
+  <script>
+    const MAX_PHOTOS = 3;
+    let photos = []; // each photo is a small JPEG stored as text (data URL)
+
+    const $ = (id) => document.getElementById(id);
+
+    // Default the date to today (local time)
+    function setToday() {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      $("return_date").value = now.toISOString().slice(0, 10);
+    }
+    setToday();
+
+    // Shrink a phone photo so it uploads fast on weak mobile data
+    function shrinkImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(url);
+          resolve(canvas.toDataURL("image/jpeg", 0.7));
+        };
+        img.onerror = () => reject(new Error("Could not read that image."));
+        img.src = url;
+      });
+    }
+
+    function renderPreviews() {
+      $("previews").innerHTML = "";
+      photos.forEach((src, i) => {
+        const box = document.createElement("div");
+        box.className = "thumb";
+        const img = document.createElement("img");
+        img.src = src;
+        const del = document.createElement("button");
+        del.type = "button";
+        del.textContent = "×";
+        del.onclick = () => { photos.splice(i, 1); renderPreviews(); };
+        box.append(img, del);
+        $("previews").append(box);
+      });
+    }
+
+    function show(text, type) {
+      const m = $("message");
+      m.textContent = text;
+      m.className = "message " + type;
+    }
+
+    $("photo_input").addEventListener("change", async (e) => {
+      for (const file of e.target.files) {
+        if (photos.length >= MAX_PHOTOS) { show("You can add up to 3 photos.", "error"); break; }
+        try { photos.push(await shrinkImage(file)); }
+        catch (err) { show(err.message, "error"); }
+      }
+      e.target.value = "";
+      renderPreviews();
+    });
+
+    $("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      $("submit").disabled = true;
+      $("submit").textContent = "Sending...";
+      $("message").className = "message";
+
+      try {
+        const res = await fetch("/api/reports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            engineer_name: $("engineer_name").value,
+            item: $("item").value,
+            quantity: $("quantity").value,
+            return_date: $("return_date").value,
+            site: $("site").value,
+            serial_number: $("serial_number").value,
+            reason: $("reason").value,
+            photos,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+
+        $("form").reset();
+        photos = [];
+        renderPreviews();
+        setToday();
+        show("Report submitted. Thank you!", "ok");
+      } catch (err) {
+        show(err.message, "error");
+      } finally {
+        $("submit").disabled = false;
+        $("submit").textContent = "Submit report";
+      }
+    });
+  </script>
+</body>
+</html>

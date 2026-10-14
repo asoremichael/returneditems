@@ -1,0 +1,10 @@
+{
+  "name": "returned-items-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Engineers report spoilt/returned items; supervisor and manager sign off.",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}
