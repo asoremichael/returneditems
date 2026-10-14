@@ -137,6 +137,37 @@ document.querySelectorAll(".tabs button").forEach((b) => {
   b.addEventListener("click", () => { filter = b.dataset.filter; render(); });
 });
 
+// ---------- Download Excel (fully signed reports only) ----------
+$("download-xlsx").addEventListener("click", () => {
+  const completed = reports
+    .filter(isDone)
+    .sort((a, b) => a.id - b.id); // oldest first, like a log book
+
+  if (!completed.length) {
+    alert("There are no fully signed reports to download yet.");
+    return;
+  }
+
+  const header = [
+    "Report ID", "Date returned", "Item", "Quantity", "Site", "Serial number",
+    "Reason for return", "Reported by", "Photos",
+    "Supervisor name", "Supervisor date", "Manager name", "Manager date",
+  ];
+  const rows = completed.map((r) => [
+    r.id, r.return_date, r.item, r.quantity, r.site, r.serial_number || "",
+    r.reason, r.engineer_name || "", (r.images || []).length,
+    r.supervisor_name, r.supervisor_date, r.manager_name, r.manager_date,
+  ]);
+  const widths = [10, 14, 24, 10, 22, 18, 40, 18, 8, 20, 16, 20, 16];
+
+  window.XlsxExport.downloadXlsx(
+    `returned-items-${todayLocal()}.xlsx`,
+    "Completed reports",
+    [header, ...rows],
+    widths
+  );
+});
+
 // ---------- Signing ----------
 $("list").addEventListener("click", async (e) => {
   if (!e.target.classList.contains("sign-btn")) return;
