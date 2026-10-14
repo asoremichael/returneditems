@@ -123,8 +123,12 @@ Do these in order. Use your phone for tests 1-3 if you can, because that is how 
 | 13 | Check Table Editor again. | `supervisor_name`, `supervisor_date`, `manager_name`, `manager_date` are filled in. |
 | 14 | Security check: visit `https://YOUR-SITE/api/supervisor` directly in the browser. | `{"error":"Wrong password"}` - no data is shown. |
 | 15 | Security check: in Supabase Storage, try opening a photo's plain link (not a signed one). | It is refused (the bucket is private). |
+| 16 | On the supervisor page, pick the current month in the month box and click **Download Excel**. | A file named like `returned-items-2026-10.xlsx` downloads. It opens in Excel with one row for every report of that month, including a **Status** column. |
+| 17 | Submit two more reports (on different days, if you can change the date field), then download the same month again. | The new reports are in the same sheet. |
+| 18 | Submit a report with a date in a different month (e.g. next month), then look at the month box. | That month now appears in the list, and its sheet contains only that report. |
+| 19 | Choose a month with no reports and click **Download Excel**. | A message says there are no reports for that month. |
 
-If all 15 pass, the app is working.
+If all 19 pass, the app is working.
 
 ---
 
@@ -136,6 +140,24 @@ If all 15 pass, the app is working.
 - **Photos do not show for the supervisor:** make sure the bucket is named exactly `report-images`.
 - **Login always says "Wrong password":** passwords are case-sensitive; if you just changed them in Vercel, redeploy.
 - **Supabase project paused:** free projects pause after about a week of no use. Open the Supabase dashboard and click **Restore**.
+
+## Monthly Excel sheets
+Both the supervisor page and the manager page have a **month box** and a **Download Excel** button.
+
+- One sheet = one month. It contains every report whose **date** (the date field on the form) falls in
+  that month, from every engineer and every day, in the order they were reported.
+- A **Status** column shows where each report is: *Waiting for supervisor*, *Waiting for manager* or *Completed*,
+  together with the supervisor and manager names and dates once they have signed. Download again later and the
+  sheet is up to date.
+- A new month starts a new sheet automatically (nothing to reset). Old months are never deleted:
+  every report stays in the database, so pick any earlier month in the box and download it again whenever you need it.
+- The manager's sheet only contains reports the supervisor has already signed, because that is all the manager can see.
+- The database is the master record; the Excel file is a copy made when you click. Photos stay in the app
+  (they are not placed inside the spreadsheet; the sheet shows how many photos each report has).
+- Tip: to keep a permanent copy of a finished month, download it at the start of the next month and save it in your
+  company folder.
+- Supabase's free plan has limited space (database 500 MB, file storage 1 GB at the time of writing). Photos use the most;
+  check Supabase -> Storage now and then.
 
 ## Everyday use
 - **Change a password:** Vercel -> Settings -> Environment Variables -> edit -> Redeploy.

@@ -57,6 +57,7 @@ $("logout").addEventListener("click", () => {
 // ---------- Loading and showing reports ----------
 async function loadReports() {
   reports = await api("GET");
+  fillMonths();
   $("login").hidden = true;
   $("main").hidden = false;
   render();
@@ -137,32 +138,67 @@ document.querySelectorAll(".tabs button").forEach((b) => {
   b.addEventListener("click", () => { filter = b.dataset.filter; render(); });
 });
 
-// ---------- Download Excel (fully signed reports only) ----------
+// ---------- Monthly Excel sheet ----------
+// Every report is kept in the database for good. A month's sheet is simply all the
+// reports whose date falls in that month, so each new month starts a fresh sheet
+// automatically, and older months can be downloaded again at any time.
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"];
+
+function monthOf(r) { return String(r.return_date || "").slice(0, 7); } // e.g. "2026-10"
+
+function monthLabel(ym) {
+  const [year, month] = ym.split("-");
+  return `${MONTH_NAMES[Number(month) - 1]} ${year}`;
+}
+
+function statusOf(r) {
+  if (isDone(r)) return "Completed";
+  if (!r.supervisor_name) return "Waiting for supervisor";
+  return "Waiting for manager";
+}
+
+// Fill the month drop-down: every month that has reports, plus the current month
+function fillMonths() {
+  const select = $("month-select");
+  const previous = select.value;
+  const current = todayLocal().slice(0, 7);
+  const months = new Set(reports.map(monthOf).filter(Boolean));
+  months.add(current);
+  const sorted = [...months].sort().reverse(); // newest first
+
+  select.innerHTML = sorted
+    .map((m) => `<option value="${m}">${monthLabel(m)}</option>`)
+    .join("");
+  select.value = sorted.includes(previous) ? previous : current;
+}
+
 $("download-xlsx").addEventListener("click", () => {
-  const completed = reports
-    .filter(isDone)
+  const month = $("month-select").value;
+  const list = reports
+    .filter((r) => monthOf(r) === month)
     .sort((a, b) => a.id - b.id); // oldest first, like a log book
 
-  if (!completed.length) {
-    alert("There are no fully signed reports to download yet.");
+  if (!list.length) {
+    alert(`There are no reports for ${monthLabel(month)} yet.`);
     return;
   }
 
   const header = [
     "Report ID", "Date returned", "Item", "Quantity", "Site", "Serial number",
-    "Reason for return", "Reported by", "Photos",
+    "Reason for return", "Reported by", "Photos", "Status",
     "Supervisor name", "Supervisor date", "Manager name", "Manager date",
   ];
-  const rows = completed.map((r) => [
+  const rows = list.map((r) => [
     r.id, r.return_date, r.item, r.quantity, r.site, r.serial_number || "",
-    r.reason, r.engineer_name || "", (r.images || []).length,
+    r.reason, r.engineer_name || "", (r.images || []).length, statusOf(r),
     r.supervisor_name, r.supervisor_date, r.manager_name, r.manager_date,
   ]);
-  const widths = [10, 14, 24, 10, 22, 18, 40, 18, 8, 20, 16, 20, 16];
+  const widths = [10, 14, 24, 10, 22, 18, 40, 18, 8, 22, 20, 16, 20, 16];
 
   window.XlsxExport.downloadXlsx(
-    `returned-items-${todayLocal()}.xlsx`,
-    "Completed reports",
+    `returned-items-${month}.xlsx`,
+    monthLabel(month),
     [header, ...rows],
     widths
   );
