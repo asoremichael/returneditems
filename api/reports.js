@@ -5,7 +5,7 @@ const { supabase, BUCKET } = require("./_lib");
 const MAX_PHOTOS = 3;
 const MAX_PHOTO_BYTES = 1.5 * 1024 * 1024; // photos are shrunk in the browser first
 
-module.exports = async (req, res) => {
+async function handle(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const b = req.body || {};
@@ -40,7 +40,10 @@ module.exports = async (req, res) => {
     const { error } = await supabase.storage
       .from(BUCKET)
       .upload(fileName, buffer, { contentType: "image/jpeg" });
-    if (error) return res.status(500).json({ error: "Could not save a photo. Try again." });
+    if (error) {
+      console.error("Photo upload failed:", error); // shows up in Vercel -> Logs
+      return res.status(500).json({ error: "Could not save a photo. Try again." });
+    }
     savedNames.push(fileName);
   }
 
@@ -54,7 +57,22 @@ module.exports = async (req, res) => {
     engineer_name: engineer || null,
     images: savedNames,
   });
-  if (error) return res.status(500).json({ error: "Could not save the report. Try again." });
+  if (error) {
+    console.error("Saving the report failed:", error); // shows up in Vercel -> Logs
+    return res.status(500).json({ error: "Could not save the report. Try again." });
+  }
 
   res.json({ ok: true });
+}
+
+// Any unexpected crash becomes a readable message, and the real cause goes to the Vercel logs
+module.exports = async (req, res) => {
+  try {
+    await handle(req, res);
+  } catch (err) {
+    console.error("Report submission crashed:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "The server had a problem. Please try again in a minute." });
+    }
+  }
 };

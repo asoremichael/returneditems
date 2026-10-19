@@ -1,3 +1,79 @@
 {
-  "cleanUrls": true
+  "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/supervisor",
+      "has": [{ "type": "host", "value": "returneditems.vercel.app" }],
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/supervisor.html",
+      "has": [{ "type": "host", "value": "returneditems.vercel.app" }],
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/manager",
+      "has": [{ "type": "host", "value": "returneditems.vercel.app" }],
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/manager.html",
+      "has": [{ "type": "host", "value": "returneditems.vercel.app" }],
+      "destination": "/",
+      "permanent": false
+    },
+
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "returns-supervisor.vercel.app" }],
+      "destination": "/supervisor",
+      "permanent": false
+    },
+    {
+      "source": "/index.html",
+      "has": [{ "type": "host", "value": "returns-supervisor.vercel.app" }],
+      "destination": "/supervisor",
+      "permanent": false
+    },
+    {
+      "source": "/manager",
+      "has": [{ "type": "host", "value": "returns-supervisor.vercel.app" }],
+      "destination": "/supervisor",
+      "permanent": false
+    },
+    {
+      "source": "/manager.html",
+      "has": [{ "type": "host", "value": "returns-supervisor.vercel.app" }],
+      "destination": "/supervisor",
+      "permanent": false
+    },
+
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "returns-manager-main.vercel.app" }],
+      "destination": "/manager",
+      "permanent": false
+    },
+    {
+      "source": "/index.html",
+      "has": [{ "type": "host", "value": "returns-manager-main.vercel.app" }],
+      "destination": "/manager",
+      "permanent": false
+    },
+    {
+      "source": "/supervisor",
+      "has": [{ "type": "host", "value": "returns-manager-main.vercel.app" }],
+      "destination": "/manager",
+      "permanent": false
+    },
+    {
+      "source": "/supervisor.html",
+      "has": [{ "type": "host", "value": "returns-manager-main.vercel.app" }],
+      "destination": "/manager",
+      "permanent": false
+    }
+  ]
 }

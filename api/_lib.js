@@ -51,7 +51,7 @@ function staffHandler(role) {
   const nameCol = `${role}_name`;
   const dateCol = `${role}_date`;
 
-  return async (req, res) => {
+  const handle = async (req, res) => {
     if (!isAllowed(req, role)) return res.status(401).json({ error: "Wrong password" });
 
     if (req.method === "GET") {
@@ -60,7 +60,10 @@ function staffHandler(role) {
       if (role === "manager") query = query.not("supervisor_name", "is", null);
 
       const { data, error } = await query;
-      if (error) return res.status(500).json({ error: "Could not load reports" });
+      if (error) {
+        console.error("Loading reports failed:", error); // shows up in Vercel -> Logs
+        return res.status(500).json({ error: "Could not load reports" });
+      }
       return res.json(await addPhotoLinks(data));
     }
 
@@ -80,12 +83,27 @@ function staffHandler(role) {
       if (role === "manager") query = query.not("supervisor_name", "is", null);
 
       const { data, error } = await query.select();
-      if (error) return res.status(500).json({ error: "Could not save" });
+      if (error) {
+        console.error("Signing failed:", error); // shows up in Vercel -> Logs
+        return res.status(500).json({ error: "Could not save" });
+      }
       if (!data.length) return res.status(400).json({ error: "Already signed, or not ready to sign." });
       return res.json({ ok: true });
     }
 
     res.status(405).json({ error: "Method not allowed" });
+  };
+
+  // Any unexpected crash becomes a readable message, and the real cause goes to the Vercel logs
+  return async (req, res) => {
+    try {
+      await handle(req, res);
+    } catch (err) {
+      console.error(`${role} handler crashed:`, err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "The server had a problem. Please try again in a minute." });
+      }
+    }
   };
 }
 

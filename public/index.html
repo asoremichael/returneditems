@@ -119,6 +119,12 @@
       $("message").className = "message";
 
       try {
+        // Vercel refuses requests over about 4.5 MB, so check the photos first
+        const photoBytes = photos.reduce((sum, p) => sum + p.length, 0);
+        if (photoBytes > 3.8 * 1024 * 1024) {
+          throw new Error("The photos are too large to send together. Remove one photo and try again.");
+        }
+
         const res = await fetch("/api/reports", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -134,7 +140,10 @@
           }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+        if (!res.ok) {
+          if (res.status === 413) throw new Error("The photos are too large to send. Remove one photo and try again.");
+          throw new Error(data.error || `Something went wrong (code ${res.status}). Please try again, and tell the admin this code if it keeps happening.`);
+        }
 
         $("form").reset();
         photos = [];
@@ -142,7 +151,9 @@
         setToday();
         show("Report submitted. Thank you!", "ok");
       } catch (err) {
-        show(err.message, "error");
+        show(err instanceof TypeError
+          ? "Could not reach the server. Check your internet connection and try again."
+          : err.message, "error");
       } finally {
         $("submit").disabled = false;
         $("submit").textContent = "Submit report";
