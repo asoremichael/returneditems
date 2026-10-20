@@ -12,7 +12,8 @@ A supervisor reviews and signs each report, then the manager signs it.
 ```
 public/        the three web pages (HTML + a little JavaScript)
 api/           small server functions (submit, supervisor, manager)
-supabase.sql   creates the database table and the private photo bucket
+supabase.sql   creates the database table and the private photo bucket (first-time setup)
+supabase-update-trips.sql   one-time update for a database that was set up earlier: adds the "trip" column
 ```
 
 ---
@@ -128,7 +129,35 @@ Do these in order. Use your phone for tests 1-3 if you can, because that is how 
 | 18 | Submit a report with a date in a different month (e.g. next month), then look at the month box. | That month now appears in the list, and its sheet contains only that report. |
 | 19 | Choose a month with no reports and click **Download Excel**. | A message says there are no reports for that month. |
 
-If all 19 pass, the app is working.
+| 20 | On the engineers' form, click **+ Add another item** twice. Fill in three different items (different location, serial number and reason for each) and add photos to some. Submit. | Message "All 3 items were submitted". The form resets to one empty item. |
+| 21 | On the supervisor page. | The 3 items appear together in ONE card headed "Trip: 3 items", each item with its own location, serial number, reason and photos. At the bottom there is one sign-off box with a button **Sign all 3 items**. |
+| 22 | Add 3 items but switch your phone to airplane mode before pressing Submit. | A red message says it could not reach the server. Nothing is lost. Turn the internet back on, press Submit again, and the items go through. |
+| 23 | On the supervisor page, type your name in the trip's box and click **Sign all 3 items**. | The trip moves to the **Signed** tab with the badge "Waiting for manager", and shows your name once. |
+| 24 | On the manager page, open the **Waiting** tab. | The same trip appears, with **Sign all 3 items**. Reports the supervisor has not signed yet are not shown. |
+| 25 | Type the manager's name and click **Sign all 3 items**. | The trip shows "Completed" with both signatures. In the Excel download, all 3 rows say Completed. |
+
+If all 25 pass, the app is working.
+
+## Reporting several items at once
+The engineers' form lets an engineer add as many as 20 items in one go (button **+ Add another item**).
+
+- Name and date are entered once at the top. Each item has its **own** item name, quantity, location (site),
+  serial number, reason for return and up to 10 photos.
+- Every item is saved as its **own report** (so the Excel sheet has one row per item), but all the items sent from the
+  form in one go form a **trip**. The supervisor and manager see a trip as one card and sign the **whole trip with one
+  button** ("Sign all 3 items"). A report sent on its own, or an old report from before trips existed, is
+  shown and signed by itself, as before.
+- If more items are added to a trip after it was signed (for example the rest were sent later after a failure),
+  the card shows "Partly signed" and the button says "Sign all 2 items": it signs only the items that are still
+  waiting. Earlier signatures are never changed.
+- The form sends the items one by one ("Sending item 3 of 10..."). If something goes wrong part-way (for example
+  the internet drops), the items already sent are saved and removed from the form, the rest stay on the screen,
+  and pressing Submit again sends only the rest.
+- Very rarely, if the internet drops at the exact moment the server is replying, an item can be saved even though
+  the form did not hear about it, and sending it again creates a duplicate. If the supervisor sees a duplicate,
+  it is harmless; just sign one of them or tell the admin.
+- Photos are shrunk in the browser before sending. If an item has so many photos that they would be too big
+  to send together, they are shrunk a little more automatically.
 
 ---
 
@@ -140,6 +169,21 @@ If all 19 pass, the app is working.
 - **Photos do not show for the supervisor:** make sure the bucket is named exactly `report-images`.
 - **Login always says "Wrong password":** passwords are case-sensitive; if you just changed them in Vercel, redeploy.
 - **Supabase project paused:** free projects pause after about a week of no use. Open the Supabase dashboard and click **Restore**.
+
+## Separate addresses for each section
+The project answers on three addresses (added in Vercel -> Settings -> Domains), and `vercel.json`
+makes each one open only its own section:
+
+| Address | Who uses it | What it opens |
+|---|---|---|
+| `returneditems.vercel.app` | Engineers | The report form. `/supervisor` and `/manager` send people back to the form. |
+| `returns-supervisor.vercel.app` | Supervisor | The supervisor login. Anything else sends them to it. |
+| `returns-manager-main.vercel.app` | Manager | The manager login. Anything else sends them to it. |
+
+- This keeps things tidy, but the **passwords** are what protect the data, not the addresses.
+- Any other address of this project (for example the original one Vercel created) still opens all three
+  sections. You can leave it alone, or remove it in Settings -> Domains.
+- If you add or rename a domain, update the host names in `vercel.json` to match.
 
 ## Monthly Excel sheets
 Both the supervisor page and the manager page have a **month box** and a **Download Excel** button.

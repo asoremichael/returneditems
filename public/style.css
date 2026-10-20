@@ -49,6 +49,15 @@ button:disabled { opacity: 0.6; cursor: wait; }
 button.secondary { background: #e5e7eb; color: #1f2937; }
 button.full { width: 100%; margin-top: 16px; }
 
+/* multi-item form */
+.item-card { border-left: 4px solid #2563eb; }
+.item-head { display: flex; justify-content: space-between; align-items: center; }
+.item-head h2 { font-size: 1.05rem; margin: 0; }
+button.small { padding: 6px 12px; font-size: 0.85rem; }
+.photo-count { font-size: 0.8rem; color: #6b7280; margin-top: 4px; }
+.progress { display: none; margin-top: 12px; text-align: center; color: #374151; font-weight: 600; }
+button[hidden] { display: none; }
+
 .row { display: flex; gap: 10px; }
 .row > div { flex: 1; }
 
@@ -85,6 +94,19 @@ button.full { width: 100%; margin-top: 16px; }
 .badge.wait-sup { background: #fef3c7; color: #92400e; }
 .badge.wait-mgr { background: #dbeafe; color: #1e40af; }
 .badge.done { background: #dcfce7; color: #166534; }
+
+.badge.partly { background: #ede9fe; color: #5b21b6; }
+
+/* a trip = several items sent together, signed together */
+.trip { border-left: 4px solid #2563eb; }
+.trip-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.trip-head h3 { margin: 0 0 2px; font-size: 1.1rem; }
+.trip-sub { color: #6b7280; font-size: 0.9rem; margin-bottom: 4px; }
+.trip-item { border-top: 1px solid #e5e7eb; margin-top: 12px; padding-top: 10px; }
+.trip-item h4 { margin: 0 0 6px; font-size: 1rem; }
+.trip-item dl { margin: 0; display: grid; grid-template-columns: 110px 1fr; gap: 4px 8px; font-size: 0.92rem; }
+.trip-item dt { color: #6b7280; }
+.trip-item dd { margin: 0; word-break: break-word; }
 
 .signbox { border-top: 1px solid #e5e7eb; margin-top: 12px; padding-top: 4px; }
 .signed { color: #166534; font-size: 0.92rem; margin-top: 8px; }

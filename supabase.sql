@@ -1,4 +1,5 @@
--- Run this once in Supabase: SQL Editor -> New query -> paste -> Run
+-- FIRST-TIME SETUP ONLY: run this once in Supabase: SQL Editor -> New query -> paste -> Run
+-- (If you already ran an older version of this file, run supabase-update-trips.sql instead.)
 
 create table reports (
   id               bigint generated always as identity primary key,
@@ -14,8 +15,11 @@ create table reports (
   supervisor_date  date,
   manager_name     text,
   manager_date     date,
-  created_at       timestamptz not null default now()
+  created_at       timestamptz not null default now(),
+  batch_id         text                              -- items submitted together share one value (a "trip")
 );
+
+create index reports_batch_id_idx on reports (batch_id);
 
 -- Lock the table: nobody can read it directly from a browser.
 -- Only our server functions (using the service key) can access it.

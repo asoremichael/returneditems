@@ -3,162 +3,309 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Report a Returned Item</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>Report Returned Items</title>
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <div class="wrap">
-    <h1>Report a Returned Item</h1>
-    <p class="sub">Fill in the details of the spoilt item you brought back to the office.</p>
+    <h1>Report Returned Items</h1>
+    <p class="sub">Add every spoilt item you brought back to the office. Use <b>Add another item</b> for each extra item.</p>
 
-    <form id="form" class="card">
-      <label for="engineer_name">Your name</label>
-      <input id="engineer_name" maxlength="100" autocomplete="name" />
-
-      <label for="item">Item <span class="req">*</span></label>
-      <input id="item" maxlength="200" required />
-
-      <div class="row">
-        <div>
-          <label for="quantity">Quantity <span class="req">*</span></label>
-          <input id="quantity" type="number" min="1" value="1" inputmode="numeric" required />
-        </div>
-        <div>
-          <label for="return_date">Date <span class="req">*</span></label>
-          <input id="return_date" type="date" required />
+    <form id="form">
+      <div class="card">
+        <div class="row">
+          <div>
+            <label for="engineer_name">Your name</label>
+            <input id="engineer_name" maxlength="100" autocomplete="name" />
+          </div>
+          <div>
+            <label for="return_date">Date <span class="req">*</span></label>
+            <input id="return_date" type="date" required />
+          </div>
         </div>
       </div>
 
-      <label for="site">Location (site) <span class="req">*</span></label>
-      <input id="site" maxlength="200" required />
+      <div id="items"></div>
 
-      <label for="serial_number">Serial number</label>
-      <input id="serial_number" maxlength="100" />
-
-      <label for="reason">Reason for return <span class="req">*</span></label>
-      <textarea id="reason" maxlength="2000" required></textarea>
-
-      <label>Photos (up to 3)</label>
-      <input id="photo_input" type="file" accept="image/*" multiple />
-      <div id="previews" class="previews"></div>
-
+      <button id="add-item" class="secondary full" type="button">+ Add another item</button>
       <button id="submit" class="full" type="submit">Submit report</button>
+      <div id="progress" class="progress"></div>
       <div id="message" class="message"></div>
     </form>
   </div>
 
+  <!-- One block like this is created for every item -->
+  <template id="item-template">
+    <div class="card item-card">
+      <div class="item-head">
+        <h2 class="item-title">Item 1</h2>
+        <button type="button" class="remove-item secondary small">Remove</button>
+      </div>
+
+      <label data-for="item">Item <span class="req">*</span></label>
+      <input data-field="item" maxlength="200" required />
+
+      <div class="row">
+        <div>
+          <label data-for="quantity">Quantity <span class="req">*</span></label>
+          <input data-field="quantity" type="number" min="1" value="1" inputmode="numeric" required />
+        </div>
+        <div>
+          <label data-for="serial_number">Serial number</label>
+          <input data-field="serial_number" maxlength="100" />
+        </div>
+      </div>
+
+      <label data-for="site">Location (site) <span class="req">*</span></label>
+      <input data-field="site" maxlength="200" required />
+
+      <label data-for="reason">Reason for return <span class="req">*</span></label>
+      <textarea data-field="reason" maxlength="2000" required></textarea>
+
+      <label data-for="photo_input">Photos (up to 10)</label>
+      <input data-field="photo_input" type="file" accept="image/*" multiple />
+      <div class="previews"></div>
+      <div class="photo-count"></div>
+
+      <div class="message item-msg"></div>
+    </div>
+  </template>
+
   <script>
-    const MAX_PHOTOS = 3;
-    let photos = []; // each photo is a small JPEG stored as text (data URL)
+    const MAX_ITEMS = 20;          // items in one go
+    const MAX_PHOTOS = 10;         // photos for each item
+    const BODY_LIMIT = 3.8 * 1024 * 1024; // Vercel refuses requests over about 4.5 MB
 
     const $ = (id) => document.getElementById(id);
+    let counter = 0; // gives every field a unique id
 
-    // Default the date to today (local time)
+    // Every item sent from this form shares one "trip" id, so the supervisor and manager
+    // can sign the whole trip in one go. A new trip starts after everything was sent.
+    const newBatchId = () =>
+      (window.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+    let batchId = newBatchId();
+
+    // ---------- helpers ----------
+    function setMsg(el, text, type) {
+      el.textContent = text;
+      el.className = el.className.replace(/\b(ok|error)\b/g, "").trim();
+      if (type) el.className += " " + type;
+    }
+    const showMessage = (text, type) => setMsg($("message"), text, type);
+    const clearMessage = () => setMsg($("message"), "", "");
+
     function setToday() {
       const now = new Date();
       now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
       $("return_date").value = now.toISOString().slice(0, 10);
     }
-    setToday();
 
-    // Shrink a phone photo so it uploads fast on weak mobile data
-    function shrinkImage(file) {
+    // ---------- photos ----------
+    function loadImage(src) {
       return new Promise((resolve, reject) => {
         const img = new Image();
-        const url = URL.createObjectURL(file);
-        img.onload = () => {
-          const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.round(img.width * scale);
-          canvas.height = Math.round(img.height * scale);
-          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-          URL.revokeObjectURL(url);
-          resolve(canvas.toDataURL("image/jpeg", 0.7));
-        };
+        img.onload = () => resolve(img);
         img.onerror = () => reject(new Error("Could not read that image."));
-        img.src = url;
+        img.src = src;
       });
     }
 
-    function renderPreviews() {
-      $("previews").innerHTML = "";
-      photos.forEach((src, i) => {
-        const box = document.createElement("div");
-        box.className = "thumb";
+    // Shrink a photo (from a file link or from an already-shrunk photo) into a small JPEG
+    async function shrinkSource(src, maxSide, quality) {
+      const img = await loadImage(src);
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff"; // transparent images would otherwise turn black
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", quality);
+    }
+
+    async function shrinkFile(file) {
+      const url = URL.createObjectURL(file);
+      try { return await shrinkSource(url, 1280, 0.7); }
+      finally { URL.revokeObjectURL(url); }
+    }
+
+    const sizeOf = (list) => list.reduce((sum, p) => sum + p.length, 0);
+
+    // If an item has so many photos that they could not be sent in one go, shrink them a bit more
+    async function fitPhotos(photos) {
+      if (sizeOf(photos) <= BODY_LIMIT) return photos;
+      for (const [side, quality] of [[1024, 0.6], [800, 0.5], [640, 0.4]]) {
+        const smaller = await Promise.all(photos.map((p) => shrinkSource(p, side, quality)));
+        if (sizeOf(smaller) <= BODY_LIMIT) return smaller;
+      }
+      return null;
+    }
+
+    function renderPreviews(card) {
+      const box = card.querySelector(".previews");
+      box.innerHTML = "";
+      card._photos.forEach((src, i) => {
+        const thumb = document.createElement("div");
+        thumb.className = "thumb";
         const img = document.createElement("img");
         img.src = src;
+        img.alt = "Photo " + (i + 1);
         const del = document.createElement("button");
         del.type = "button";
         del.textContent = "×";
-        del.onclick = () => { photos.splice(i, 1); renderPreviews(); };
-        box.append(img, del);
-        $("previews").append(box);
+        del.setAttribute("aria-label", "Remove photo " + (i + 1));
+        del.onclick = () => { card._photos.splice(i, 1); renderPreviews(card); };
+        thumb.append(img, del);
+        box.append(thumb);
       });
+      card.querySelector(".photo-count").textContent =
+        card._photos.length ? `${card._photos.length} of ${MAX_PHOTOS} photos` : "";
     }
 
-    function show(text, type) {
-      const m = $("message");
-      m.textContent = text;
-      m.className = "message " + type;
+    // ---------- item blocks ----------
+    const field = (card, name) => card.querySelector(`[data-field="${name}"]`);
+    const cards = () => [...$("items").children];
+
+    function renumber() {
+      const all = cards();
+      all.forEach((card, i) => {
+        card.querySelector(".item-title").textContent = "Item " + (i + 1);
+        card.querySelector(".remove-item").hidden = all.length === 1;
+      });
+      $("add-item").disabled = all.length >= MAX_ITEMS;
     }
 
-    $("photo_input").addEventListener("change", async (e) => {
-      for (const file of e.target.files) {
-        if (photos.length >= MAX_PHOTOS) { show("You can add up to 3 photos.", "error"); break; }
-        try { photos.push(await shrinkImage(file)); }
-        catch (err) { show(err.message, "error"); }
+    function addItem(focus) {
+      const card = $("item-template").content.firstElementChild.cloneNode(true);
+      counter++;
+      card._photos = [];
+      card.querySelectorAll("[data-field]").forEach((el) => { el.id = `f${counter}-${el.dataset.field}`; });
+      card.querySelectorAll("label[data-for]").forEach((l) => { l.htmlFor = `f${counter}-${l.dataset.for}`; });
+
+      const msg = card.querySelector(".item-msg");
+      field(card, "photo_input").addEventListener("change", async (e) => {
+        const files = [...e.target.files];
+        e.target.value = "";
+        setMsg(msg, "", "");
+        for (const file of files) {
+          if (card._photos.length >= MAX_PHOTOS) {
+            setMsg(msg, `You can add up to ${MAX_PHOTOS} photos for each item.`, "error");
+            break;
+          }
+          try { card._photos.push(await shrinkFile(file)); }
+          catch (err) { setMsg(msg, err.message, "error"); }
+        }
+        renderPreviews(card);
+      });
+      card.querySelector(".remove-item").onclick = () => { card.remove(); renumber(); };
+
+      $("items").append(card);
+      renumber();
+      if (focus) {
+        card.scrollIntoView({ behavior: "smooth", block: "start" });
+        field(card, "item").focus({ preventScroll: true });
       }
-      e.target.value = "";
-      renderPreviews();
+      return card;
+    }
+
+    $("add-item").addEventListener("click", () => {
+      clearMessage();
+      if (cards().length >= MAX_ITEMS) {
+        showMessage(`You can add up to ${MAX_ITEMS} items at a time.`, "error");
+        return;
+      }
+      addItem(true);
     });
+
+    // ---------- sending ----------
+    async function sendItem(card, common) {
+      const photos = await fitPhotos(card._photos);
+      if (!photos) throw new Error("The photos for this item are too large. Remove a few photos and try again.");
+
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batch_id: batchId,
+          engineer_name: common.engineer_name,
+          return_date: common.return_date,
+          item: field(card, "item").value,
+          quantity: field(card, "quantity").value,
+          site: field(card, "site").value,
+          serial_number: field(card, "serial_number").value,
+          reason: field(card, "reason").value,
+          photos,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 413) throw new Error("The photos for this item are too large to send. Remove a few photos and try again.");
+        throw new Error(data.error || `Something went wrong (code ${res.status}). Please try again, and tell the admin this code if it keeps happening.`);
+      }
+    }
 
     $("form").addEventListener("submit", async (e) => {
       e.preventDefault();
+      clearMessage();
+      cards().forEach((c) => setMsg(c.querySelector(".item-msg"), "", ""));
+
+      const toSend = cards();
+      const total = toSend.length;
+      const common = { engineer_name: $("engineer_name").value, return_date: $("return_date").value };
+
       $("submit").disabled = true;
-      $("submit").textContent = "Sending...";
-      $("message").className = "message";
+      $("add-item").disabled = true;
+      let sent = 0;
 
       try {
-        // Vercel refuses requests over about 4.5 MB, so check the photos first
-        const photoBytes = photos.reduce((sum, p) => sum + p.length, 0);
-        if (photoBytes > 3.8 * 1024 * 1024) {
-          throw new Error("The photos are too large to send together. Remove one photo and try again.");
+        for (const card of toSend) {
+          $("progress").style.display = "block";
+          $("progress").textContent = `Sending item ${sent + 1} of ${total}...`;
+          $("submit").textContent = "Sending...";
+          try {
+            await sendItem(card, common);
+          } catch (err) {
+            const text = err instanceof TypeError
+              ? "Could not reach the server. Check your internet connection and try again."
+              : err.message;
+            setMsg(card.querySelector(".item-msg"), text, "error");
+            card.scrollIntoView({ behavior: "smooth", block: "center" });
+            showMessage(
+              (sent ? `${sent} of ${total} item(s) were sent. ` : "Nothing was sent. ") +
+              "The item marked in red was not sent. Fix the problem, then press Submit again to send the rest. Items already sent will not be sent twice.",
+              "error"
+            );
+            return;
+          }
+          sent++;
+          card.remove(); // sent items leave the form so they can never be sent twice
+          renumber();
         }
 
-        const res = await fetch("/api/reports", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            engineer_name: $("engineer_name").value,
-            item: $("item").value,
-            quantity: $("quantity").value,
-            return_date: $("return_date").value,
-            site: $("site").value,
-            serial_number: $("serial_number").value,
-            reason: $("reason").value,
-            photos,
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          if (res.status === 413) throw new Error("The photos are too large to send. Remove one photo and try again.");
-          throw new Error(data.error || `Something went wrong (code ${res.status}). Please try again, and tell the admin this code if it keeps happening.`);
-        }
-
-        $("form").reset();
-        photos = [];
-        renderPreviews();
+        // Everything was sent: start fresh (and a new trip)
+        batchId = newBatchId();
+        $("engineer_name").value = "";
         setToday();
-        show("Report submitted. Thank you!", "ok");
-      } catch (err) {
-        show(err instanceof TypeError
-          ? "Could not reach the server. Check your internet connection and try again."
-          : err.message, "error");
+        if (!cards().length) addItem(false);
+        showMessage(
+          total === 1 ? "Report submitted. Thank you!" : `All ${total} items were submitted. Thank you!`,
+          "ok"
+        );
+        window.scrollTo({ top: 0, behavior: "smooth" });
       } finally {
+        $("progress").style.display = "none";
         $("submit").disabled = false;
         $("submit").textContent = "Submit report";
+        renumber();
       }
     });
+
+    // ---------- start ----------
+    setToday();
+    addItem(false);
   </script>
 </body>
 </html>

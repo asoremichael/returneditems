@@ -79,25 +79,32 @@ function signedLine(label, name, date) {
   return name ? `<div class="signed">✔ ${label}: <b>${esc(name)}</b> on ${esc(date)}</div>` : "";
 }
 
-function signBox(r) {
-  const title = role === "supervisor" ? "Supervisor sign-off" : "Manager sign-off";
+// The sign-off form. For one report: signBox({ id }). For a whole trip: signBox({ batch, count }).
+function signBox(opts) {
+  const trip = !!opts.batch;
+  const who = role === "supervisor" ? "Supervisor" : "Manager";
+  const title = trip ? `${who} sign-off for all ${opts.count} items` : `${who} sign-off`;
+  const target = trip ? `data-batch="${esc(opts.batch)}"` : `data-id="${esc(opts.id)}"`;
   return `
-    <div class="signbox" data-id="${r.id}">
+    <div class="signbox" ${target}>
       <label>${title} - your name</label>
       <input class="sign-name" maxlength="100" />
       <label>Date</label>
       <input class="sign-date" type="date" value="${todayLocal()}" />
-      <button class="full sign-btn" type="button">Sign and submit</button>
+      <button class="full sign-btn" type="button">${trip ? `Sign all ${opts.count} items` : "Sign and submit"}</button>
       <div class="message sign-msg"></div>
     </div>`;
 }
 
-function renderReport(r) {
+function photosHtml(r) {
   const photos = (r.photo_urls || [])
     .map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Photo" loading="lazy"></a>`)
     .join("");
+  return photos ? `<div class="photos">${photos}</div>` : "";
+}
 
-  const myTurn = waitingForMe(r);
+// A report on its own (not part of a trip)
+function renderReport(r) {
   return `
     <div class="card report">
       ${badge(r)}
@@ -109,17 +116,82 @@ function renderReport(r) {
         <dt>Reason</dt><dd>${esc(r.reason)}</dd>
         <dt>Reported by</dt><dd>${esc(r.engineer_name) || "-"}</dd>
       </dl>
-      ${photos ? `<div class="photos">${photos}</div>` : ""}
+      ${photosHtml(r)}
       ${signedLine("Supervisor", r.supervisor_name, r.supervisor_date)}
       ${signedLine("Manager", r.manager_name, r.manager_date)}
-      ${myTurn ? signBox(r) : ""}
+      ${waitingForMe(r) ? signBox({ id: r.id }) : ""}
+    </div>`;
+}
+
+// ---------- Trips: items sent together from one form are shown together and signed together ----------
+function buildGroups() {
+  const map = new Map();
+  for (const r of reports) { // newest first, as the server sends them
+    const key = r.batch_id || "single-" + r.id;
+    if (!map.has(key)) map.set(key, { batch_id: r.batch_id || null, items: [] });
+    map.get(key).items.push(r);
+  }
+  const groups = [...map.values()];
+  groups.forEach((g) => g.items.sort((a, b) => a.id - b.id)); // items in the order they were entered
+  return groups;
+}
+
+// If every item in the trip was signed by the same person on the same date, show that once
+function uniformSignature(items, who) {
+  const first = items[0];
+  if (!first[who + "_name"]) return null;
+  const same = items.every((r) =>
+    r[who + "_name"] === first[who + "_name"] && r[who + "_date"] === first[who + "_date"]);
+  return same ? first : null;
+}
+
+function renderTripItem(r, showBadge, hideSupervisor, hideManager) {
+  return `
+    <div class="trip-item">
+      ${showBadge ? badge(r) : ""}
+      <h4>${esc(r.item)} &times; ${esc(r.quantity)}</h4>
+      <dl>
+        <dt>Site</dt><dd>${esc(r.site)}</dd>
+        <dt>Serial number</dt><dd>${esc(r.serial_number) || "-"}</dd>
+        <dt>Reason</dt><dd>${esc(r.reason)}</dd>
+      </dl>
+      ${photosHtml(r)}
+      ${hideSupervisor ? "" : signedLine("Supervisor", r.supervisor_name, r.supervisor_date)}
+      ${hideManager ? "" : signedLine("Manager", r.manager_name, r.manager_date)}
+    </div>`;
+}
+
+function renderTrip(g) {
+  const items = g.items;
+  const by = items.map((r) => r.engineer_name).find(Boolean) || "-";
+  const dates = [...new Set(items.map((r) => r.return_date))];
+  const dateText = dates.length === 1 ? dates[0] : "various dates";
+  const supervisor = uniformSignature(items, "supervisor");
+  const manager = uniformSignature(items, "manager");
+  const mixed = new Set(items.map(statusOf)).size > 1; // some items are further along than others
+  const waiting = items.filter(waitingForMe);
+
+  return `
+    <div class="card trip">
+      <div class="trip-head">
+        <div>
+          <h3>Trip: ${items.length} items</h3>
+          <div class="trip-sub">Reported by ${esc(by)} &middot; ${esc(dateText)}</div>
+        </div>
+        ${mixed ? '<span class="badge partly">Partly signed</span>' : badge(items[0])}
+      </div>
+      ${items.map((r) => renderTripItem(r, mixed, !!supervisor, !!manager)).join("")}
+      ${supervisor ? signedLine("Supervisor", supervisor.supervisor_name, supervisor.supervisor_date) : ""}
+      ${manager ? signedLine("Manager", manager.manager_name, manager.manager_date) : ""}
+      ${waiting.length ? signBox({ batch: g.batch_id, count: waiting.length }) : ""}
     </div>`;
 }
 
 function render() {
-  const list = reports.filter((r) => {
-    if (filter === "waiting") return waitingForMe(r);
-    if (filter === "done") return !waitingForMe(r);
+  const groups = buildGroups().filter((g) => {
+    const waiting = g.items.some(waitingForMe);
+    if (filter === "waiting") return waiting;
+    if (filter === "done") return !waiting;
     return true;
   });
   const waitingCount = reports.filter(waitingForMe).length;
@@ -129,8 +201,8 @@ function render() {
   });
   $("waiting-count").textContent = waitingCount;
 
-  $("list").innerHTML = list.length
-    ? list.map(renderReport).join("")
+  $("list").innerHTML = groups.length
+    ? groups.map((g) => (g.items.length > 1 ? renderTrip(g) : renderReport(g.items[0]))).join("")
     : '<div class="card">Nothing here.</div>';
 }
 
@@ -216,7 +288,10 @@ $("list").addEventListener("click", async (e) => {
 
   e.target.disabled = true;
   try {
-    await api("POST", { id: Number(box.dataset.id), name, date });
+    // A trip box signs every item of the trip that is waiting for you; otherwise just this one report
+    await api("POST", box.dataset.batch
+      ? { batch_id: box.dataset.batch, name, date }
+      : { id: Number(box.dataset.id), name, date });
     await loadReports();
   } catch (err) {
     msg.textContent = err.message;

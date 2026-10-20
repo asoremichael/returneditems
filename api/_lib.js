@@ -46,7 +46,7 @@ function todayString() {
 
 // ---------- One handler used by both the supervisor and the manager ----------
 // GET  -> list reports
-// POST -> sign a report with a name and date
+// POST -> sign one report, or a whole trip, with a name and date
 function staffHandler(role) {
   const nameCol = `${role}_name`;
   const dateCol = `${role}_date`;
@@ -68,18 +68,26 @@ function staffHandler(role) {
     }
 
     if (req.method === "POST") {
-      const { id, name, date } = req.body || {};
+      // Sign ONE report ({ id }) or every report of a trip ({ batch_id }) in one go
+      const { id, batch_id, name, date } = req.body || {};
       const cleanName = String(name || "").trim().slice(0, 100);
       if (!cleanName) return res.status(400).json({ error: "Please type your name." });
       if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ error: "Invalid date." });
       }
+      if (batch_id && !/^[A-Za-z0-9-]{8,64}$/.test(String(batch_id))) {
+        return res.status(400).json({ error: "Invalid trip." });
+      }
+      if (!batch_id && !Number.isInteger(Number(id))) {
+        return res.status(400).json({ error: "Nothing to sign." });
+      }
 
       let query = supabase
         .from("reports")
         .update({ [nameCol]: cleanName, [dateCol]: date || todayString() })
-        .eq("id", id)
-        .is(nameCol, null); // can only sign once
+        .is(nameCol, null); // each report can only be signed once
+      query = batch_id ? query.eq("batch_id", String(batch_id)) : query.eq("id", Number(id));
+      // The manager can only sign reports the supervisor has already signed
       if (role === "manager") query = query.not("supervisor_name", "is", null);
 
       const { data, error } = await query.select();
@@ -88,7 +96,7 @@ function staffHandler(role) {
         return res.status(500).json({ error: "Could not save" });
       }
       if (!data.length) return res.status(400).json({ error: "Already signed, or not ready to sign." });
-      return res.json({ ok: true });
+      return res.json({ ok: true, signed: data.length });
     }
 
     res.status(405).json({ error: "Method not allowed" });
